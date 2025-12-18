@@ -1,6 +1,5 @@
 // Author: Preston Lee
 
-
 import fs from 'fs';
 import express from "express";
 import basicAuth from 'express-basic-auth';
@@ -8,6 +7,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import path from 'path';
 
 dotenv.config();
 
@@ -15,40 +15,86 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const my_version = JSON.parse(fs.readFileSync(join(__dirname, '..', 'package.json')).toString()).version;
 
-import { AbstractSensitivityRuleProvider, DataSharingCDSHookRequest, DataSharingEngineContext } from '@asushares/core';
+import { DataSharingCDSHookRequest, DataSharingEngineContext, DataSegmentationModuleRegistry, DataSegmentationModule } from '@complylight/core';
 
 import { BundleEntry, Consent } from 'fhir/r5';
 
 import { FileSystemCodeMatchingThesholdCDSHookEngine } from './patient_consent_consult_hook_processors/file_system_code_matching_theshold_cds_hook_engine.js';
 import { FileSystemDataSharingCDSHookValidator } from './file_system_data_sharing_cds_hook_validator.js';
-import { FileSystemCodeMatchingThresholdSensitivityRuleProvider } from './file_system_code_matching_theshold_sensitivity_rule_provider.js';
-import Ajv from 'ajv';
-import path from 'path';
+import { FileSystemDataSegmentationModuleProvider } from './file_system_data_segmentation_module_provider.js';
 
-
-if (process.env.CDS_FHIR_BASE_URL) {
-    console.log('Using CDS_FHIR_BASE_URL ' + process.env.CDS_FHIR_BASE_URL);
+// Environment variable validation
+if (process.env.COMPLYLIGHT_SERVER_FHIR_BASE_URL) {
+    console.log('Using COMPLYLIGHT_SERVER_FHIR_BASE_URL ' + process.env.COMPLYLIGHT_SERVER_FHIR_BASE_URL);
 } else {
-    console.error('CDS_FHIR_BASE_URL must be set. Exiting, sorry!');
+    console.error('COMPLYLIGHT_SERVER_FHIR_BASE_URL must be set. Exiting, sorry!');
     process.exit(1);
 }
-if (!process.env.CDS_ADMINISTRATOR_PASSWORD) {
-    console.error('CDS_ADMINISTRATOR_PASSWORD must be set. Exiting, sorry!');
+if (!process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD) {
+    console.error('COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD must be set. Exiting, sorry!');
     process.exit(1);
 }
+if (!process.env.COMPLYLIGHT_SERVER_MODULES_DIRECTORY) {
+    console.error('COMPLYLIGHT_SERVER_MODULES_DIRECTORY must be set. Exiting, sorry!');
+    process.exit(1);
+}
+
+// Resolve modules directory path (handles both absolute and relative paths)
+// Relative paths are resolved relative to the current working directory
+const modulesDirectoryRaw = process.env.COMPLYLIGHT_SERVER_MODULES_DIRECTORY;
+const modulesDirectory = path.isAbsolute(modulesDirectoryRaw) 
+    ? modulesDirectoryRaw 
+    : path.resolve(process.cwd(), modulesDirectoryRaw);
+
+// Create modules directory if it doesn't exist
+if (!fs.existsSync(modulesDirectory)) {
+    try {
+        fs.mkdirSync(modulesDirectory, { recursive: true });
+        console.log(`Created modules directory: ${modulesDirectory}`);
+    } catch (error: any) {
+        console.error(`Failed to create modules directory ${modulesDirectory}:`, error.message);
+        process.exit(1);
+    }
+} else {
+    // Verify it's actually a directory
+    const stats = fs.statSync(modulesDirectory);
+    if (!stats.isDirectory()) {
+        console.error(`${modulesDirectory} exists but is not a directory. Exiting, sorry!`);
+        process.exit(1);
+    }
+}
+
 const app = express();
-// 
-// Errors are not helpful to the user when doing this.
 app.use(express.json({ limit: '100mb' }));
 app.use(cors());
 
-let rules_file_path = FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_FILE_PATH;
-let cds_hooks_validator = new FileSystemDataSharingCDSHookValidator();
+// Copy default module from core library if it doesn't exist
+const defaultModulePath = path.join(__dirname, '..', 'node_modules', '@complylight', 'core', 'build', 'src', 'assets', 'modules', 'default-42cfr-part2-module.json');
+const defaultModuleDest = path.join(modulesDirectory, 'default-42cfr-part2-module.json');
 
-console.log('Rules will be loaded from', rules_file_path);
-// let default_rule_provider = 
-const rule_provider_cache: { [key: string]: AbstractSensitivityRuleProvider } = {};
-rule_provider_cache[FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_FILE_NAME] = new FileSystemCodeMatchingThresholdSensitivityRuleProvider(rules_file_path);
+if (!fs.existsSync(defaultModuleDest) && fs.existsSync(defaultModulePath)) {
+    try {
+        fs.copyFileSync(defaultModulePath, defaultModuleDest);
+        console.log('Copied default-42cfr-part2-module.json to modules directory');
+    } catch (error) {
+        console.error('Failed to copy default module:', error);
+    }
+} else if (!fs.existsSync(defaultModulePath)) {
+    console.warn('Default module file not found in core package. Expected at:', defaultModulePath);
+}
+
+// Initialize module registry and provider
+const moduleRegistry = new DataSegmentationModuleRegistry();
+let moduleProvider: FileSystemDataSegmentationModuleProvider;
+let cds_hooks_validator: FileSystemDataSharingCDSHookValidator;
+
+try {
+    moduleProvider = new FileSystemDataSegmentationModuleProvider(moduleRegistry, modulesDirectory);
+    cds_hooks_validator = new FileSystemDataSharingCDSHookValidator();
+} catch (error: any) {
+    console.error('Failed to initialize module provider:', error.message);
+    process.exit(1);
+}
 
 // Root URL
 app.get('/', (req, res) => {
@@ -66,8 +112,8 @@ app.get('/cds-services', (req, res) => {
         "services": [
             {
                 "hook": "patient-consent-consult",
-                "title": "SHARES Patient Consent Consult",
-                "description": "ASU SHARES consent decision services enable queries about the patient consents applicable to a particular workflow or exchange context.",
+                "title": "ComplyLight Patient Consent Consult",
+                "description": "ComplyLight consent decision services enable queries about the patient consents applicable to a particular workflow or exchange context.",
                 "id": "patient-consent-consult",
                 "prefetch": { "patient": "Patient/{{context.patientId}}" },
                 "usageRequirements": "Access to the FHIR Patient data potentially subject to consent policies."
@@ -81,26 +127,16 @@ app.get('/cds-services', (req, res) => {
 const custom_theshold_header = DataSharingEngineContext.HEADER_CDS_CONFIDENCE_THRESHOLD.toLowerCase();
 const redaction_enabled_header = DataSharingEngineContext.HEADER_CDS_REDACTION_ENABLED.toLowerCase();
 const create_audit_event_header = DataSharingEngineContext.HEADER_CDS_CREATE_AUDIT_EVENT_ENABLED.toLowerCase();
-const rules_file_header = DataSharingEngineContext.HEADER_CDS_RULES_FILE.toLowerCase();
 
 app.post('/cds-services/patient-consent-consult', (req, res) => {
-    // req.headers
-    // try {
-
-    // let json = JSON.parse(req.body); // Will throw an error if not valid JSON.
     const results = cds_hooks_validator.validateRequest(req.body);
-    // cds_hooks_validator.requestValidator(req.body);
-    // const results =  Ajv. cds_hooks_validator.requestValidator.errors;
-    // console.log("Results:" + results);
 
     if (results) {
         res.status(400).json({ html: results });
     } else {
         let data: DataSharingCDSHookRequest = req.body;
-        let subjects = (data.context.patientId || []);//.map(n => {'Patient/' + n.});
+        let subjects = (data.context.patientId || []);
         let categories = data.context.category || [];
-        let content = data.context.content;
-
 
         let redaction_enabled: boolean = (req.headers[redaction_enabled_header] == 'true' || req.headers[redaction_enabled_header] == null);
         console.log("Resource redaction:", redaction_enabled);
@@ -116,22 +152,7 @@ app.post('/cds-services/patient-consent-consult', (req, res) => {
             console.log('Using default confidence threshold: ' + threshold);
         }
 
-        let rules_file = req.headers[rules_file_header]?.toString();
-        let rule_provider = rule_provider_cache[FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_FILE_NAME];
-        if (rules_file == null) {
-            // Use the default rules provider.
-        } else {
-            console.log("Using user-requested rules file:", rules_file);
-            if (rule_provider_cache[rules_file] == null) {
-                rule_provider_cache[rules_file] = new FileSystemCodeMatchingThresholdSensitivityRuleProvider(
-                    path.join(FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_DIRECTORY, rules_file));
-                console.log('New rule provider loaded and cached for', rules_file);
-            }
-            rule_provider = rule_provider_cache[rules_file];
-        }
-
-
-        let proc = new FileSystemCodeMatchingThesholdCDSHookEngine(rule_provider, threshold, redaction_enabled, create_audit_event);
+        let proc = new FileSystemCodeMatchingThesholdCDSHookEngine(moduleProvider, threshold, redaction_enabled, create_audit_event, moduleRegistry);
         if (data.context.consent != null && data.context.consent.length > 0) {
             console.log("Consent(s) overrides in request context will forgo FHIR server query.");
             let card = proc.process(data.context.consent, data.context);
@@ -157,20 +178,12 @@ app.post('/cds-services/patient-consent-consult', (req, res) => {
                         res.status(502).send({ message: msg, details: e });
                     }
                 });
-                // console.log(resp.data);
             });
         }
-
-        // console.log(data.context);
-        // res.status(200).send({ all: 'good' });
     }
-    // } catch (error) {
-    // console.log(JSON.stringify(error));
-    //     res.status(400).json({ message: 'Request body must be a valid JSON document.' });
-    // }
 });
 
-
+// Schema endpoints
 app.get('/schemas/patient-consent-consult-hook-request.schema.json', (req, res) => {
     try {
         const content = fs.readFileSync(FileSystemDataSharingCDSHookValidator.REQUEST_SCHEMA_FILE);
@@ -191,35 +204,164 @@ app.get('/schemas/patient-consent-consult-hook-response.schema.json', (req, res)
     }
 });
 
-app.get('/schemas/sensitivity-rules.schema.json', (req, res) => {
+app.get('/schemas/data-segmentation-module.schema.json', (req, res) => {
     try {
-        const content = fs.readFileSync(FileSystemCodeMatchingThresholdSensitivityRuleProvider.SENSITIVITY_RULES_JSON_SCHEMA_FILE);
+        const content = fs.readFileSync(FileSystemDataSegmentationModuleProvider.getModuleSchemaPath());
         res.status(200).send(content);
     } catch (error) {
-        console.error('Error reading sensitivity rules schema file:', error);
+        console.error('Error reading module schema file:', error);
         res.status(500).json({ error: 'Failed to read schema file' });
     }
 });
 
-app.get('/data/sensitivity-rules.json', (req, res) => {
-    res.status(200).send(rule_provider_cache[FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_FILE_NAME].loadRulesFile());
-});
-
-app.post('/data/sensitivity-rules.json', basicAuth({ users: { administrator: process.env.CDS_ADMINISTRATOR_PASSWORD } }), (req, res) => {
-    // console.log(req.body);    
-    const results = rule_provider_cache[FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_FILE_NAME].validateRuleFile(req.body);
-    if (results) {
-        res.status(400).json({ message: "Invalid request.", errors: results });
-    } else {
-        // FIXME Probably shouldn't cast like this but it's a quick fix.
-        let rp = rule_provider_cache[FileSystemCodeMatchingThresholdSensitivityRuleProvider.DEFAULT_RULES_FILE_NAME] as FileSystemCodeMatchingThresholdSensitivityRuleProvider;
-        rp.updateRulesFile(req.body);
-        console.log('Rules file has been updated.');
-        res.status(200).json({ message: 'File updated successfully. The engine has been reinitialized accordingly and rules are already in effect.' });
+// Module management endpoints
+app.get('/modules', (req, res) => {
+    try {
+        const modules = moduleRegistry.getModules().map(m => ({
+            id: m.id,
+            name: m.name,
+            version: m.version,
+            description: m.description,
+            enabled: m.enabled
+        }));
+        res.status(200).json(modules);
+    } catch (error) {
+        console.error('Error listing modules:', error);
+        res.status(500).json({ error: 'Failed to list modules' });
     }
 });
 
+app.get('/modules/:id', (req, res) => {
+    try {
+        const module = moduleRegistry.getModule(req.params.id);
+        if (!module) {
+            res.status(404).json({ error: 'Module not found' });
+            return;
+        }
+        // Read the module file directly to return the original JSON
+        const filePath = moduleProvider.getModuleFilePath(req.params.id);
+        if (!filePath || !fs.existsSync(filePath)) {
+            res.status(404).json({ error: 'Module file not found' });
+            return;
+        }
+        const moduleJson = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        res.status(200).json(moduleJson);
+    } catch (error: any) {
+        console.error('Error getting module:', error);
+        res.status(500).json({ error: 'Failed to get module', details: error.message });
+    }
+});
 
+app.post('/modules', basicAuth({ users: { administrator: process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD } }), (req, res) => {
+    try {
+        const validationError = moduleProvider.validateModule(req.body);
+        if (validationError) {
+            res.status(400).json({ message: "Invalid module.", error: validationError });
+            return;
+        }
 
+        // Check if module already exists
+        if (moduleRegistry.getModule(req.body.id)) {
+            res.status(409).json({ message: "Module with this ID already exists. Use PUT to update." });
+            return;
+        }
+
+        const module = DataSegmentationModule.fromJson(req.body);
+        moduleProvider.saveModule(req.body);
+        moduleRegistry.addModule(module);
+        moduleProvider.reinitialize();
+        
+        console.log('Module created:', module.id);
+        res.status(201).json({ message: 'Module created successfully.', id: module.id });
+    } catch (error: any) {
+        console.error('Error creating module:', error);
+        res.status(500).json({ error: 'Failed to create module', details: error.message });
+    }
+});
+
+app.put('/modules/:id', basicAuth({ users: { administrator: process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD } }), (req, res) => {
+    try {
+        const existingModule = moduleRegistry.getModule(req.params.id);
+        if (!existingModule) {
+            res.status(404).json({ error: 'Module not found' });
+            return;
+        }
+
+        // Ensure the ID in the body matches the URL parameter
+        if (req.body.id && req.body.id !== req.params.id) {
+            res.status(400).json({ error: 'Module ID in body must match URL parameter' });
+            return;
+        }
+        req.body.id = req.params.id;
+
+        const validationError = moduleProvider.validateModule(req.body);
+        if (validationError) {
+            res.status(400).json({ message: "Invalid module.", error: validationError });
+            return;
+        }
+
+        const module = DataSegmentationModule.fromJson(req.body);
+        moduleProvider.saveModule(req.body);
+        moduleRegistry.removeModule(req.params.id);
+        moduleRegistry.addModule(module);
+        moduleProvider.reinitialize();
+        
+        console.log('Module updated:', module.id);
+        res.status(200).json({ message: 'Module updated successfully.', id: module.id });
+    } catch (error: any) {
+        console.error('Error updating module:', error);
+        res.status(500).json({ error: 'Failed to update module', details: error.message });
+    }
+});
+
+app.delete('/modules/:id', basicAuth({ users: { administrator: process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD } }), (req, res) => {
+    try {
+        const module = moduleRegistry.getModule(req.params.id);
+        if (!module) {
+            res.status(404).json({ error: 'Module not found' });
+            return;
+        }
+
+        const deleted = moduleProvider.deleteModule(req.params.id);
+        if (deleted) {
+            res.status(200).json({ message: 'Module deleted successfully.' });
+        } else {
+            res.status(500).json({ error: 'Failed to delete module file' });
+        }
+    } catch (error: any) {
+        console.error('Error deleting module:', error);
+        res.status(500).json({ error: 'Failed to delete module', details: error.message });
+    }
+});
+
+app.post('/modules/:id/enable', basicAuth({ users: { administrator: process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD } }), (req, res) => {
+    try {
+        const enabled = moduleRegistry.enableModule(req.params.id);
+        if (enabled) {
+            moduleProvider.reinitialize();
+            res.status(200).json({ message: 'Module enabled successfully.' });
+        } else {
+            res.status(404).json({ error: 'Module not found' });
+        }
+    } catch (error: any) {
+        console.error('Error enabling module:', error);
+        res.status(500).json({ error: 'Failed to enable module', details: error.message });
+    }
+});
+
+app.post('/modules/:id/disable', basicAuth({ users: { administrator: process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD } }), (req, res) => {
+    try {
+        const disabled = moduleRegistry.disableModule(req.params.id);
+        if (disabled) {
+            moduleProvider.reinitialize();
+            res.status(200).json({ message: 'Module disabled successfully.' });
+        } else {
+            res.status(404).json({ error: 'Module not found' });
+        }
+    } catch (error: any) {
+        console.error('Error disabling module:', error);
+        res.status(500).json({ error: 'Failed to disable module', details: error.message });
+    }
+});
 
 export default app;

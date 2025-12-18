@@ -1,0 +1,60 @@
+# ComplyLight Server
+
+This express application provides server API's compliant with the FHIR CDS-Hook specification, as well as endpoints used by ComplyLight client applications. The 
+
+## Related Projects
+
+- ../core - ESM module implementing data segmentation functions and providing common code for client applications.
+- ../portal - User-facing SPA browser webapp written in Angular.
+
+## TypeScript & Module System
+- Use TypeScript with ES modules
+- Enable strict mode in TypeScript
+- Use ES6 import/export syntax
+- Target ES2022 or later
+- Use `moduleResolution: "bundler"` for modern module resolution
+
+## Code Style
+- Add author comment at the top of files: `// Author: Preston Lee`
+- Prefer `const` over `let`; avoid `var`
+- Use explicit type annotations for function parameters and return types
+- Use async/await for asynchronous operations
+- Handle errors with try-catch blocks and appropriate HTTP status codes
+
+## Express Setup
+- Use Express 5+
+- Enable CORS middleware: `app.use(cors())`
+- Configure JSON body parser with appropriate limits: `app.use(express.json({ limit: '100mb' }))`
+- Use environment variables with dotenv for configuration
+- Validate required environment variables at startup and exit if missing
+
+## API Design
+- Use appropriate HTTP status codes (200, 400, 500, 502, etc.)
+- Return JSON responses with consistent structure
+- Include error messages in error responses
+- Use RESTful route naming conventions
+- Separate route handlers from server setup
+
+## File Organization
+- Source code in `src/` directory
+- Tests in `test/` directory
+- Build output in `build/` directory
+- Separate API routes from server startup logic
+- Use descriptive file names with kebab-case
+
+## Error Handling
+- Validate request bodies before processing
+- Return meaningful error messages to clients
+- Log errors to console for debugging
+- Use appropriate HTTP status codes for different error types
+
+## Security
+- Use basic authentication for administrative endpoints
+- Validate and sanitize all user inputs
+- Store sensitive configuration in environment variables
+
+## Dependencies
+- Use TypeScript types packages (`@types/*`) for type definitions
+- Prefer well-maintained packages from npm
+- Keep dependencies up to date
+

@@ -4,13 +4,13 @@
 // dotenv.config();
 // import axios from 'axios';
 
-// console.log("SHARES CDS Sample Data Loader");
+// console.log("ComplyLight CDS Sample Data Loader");
 
-// const base = process.env.CDS_FHIR_BASE_URL;
+// const base = process.env.COMPLYLIGHT_SERVER_FHIR_BASE_URL;
 // if (base) {
-//     console.log('Using CDS_FHIR_BASE_URL: ' + base);
+//     console.log('Using COMPLYLIGHT_SERVER_FHIR_BASE_URL: ' + base);
 // } else {
-//     console.error('CDS_FHIR_BASE_URL must be set. Exiting, sorry!');
+//     console.error('COMPLYLIGHT_SERVER_FHIR_BASE_URL must be set. Exiting, sorry!');
 //     process.exit(1);
 // }
 

@@ -3,7 +3,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-import { DataSharingCDSHookRequest } from '@asushares/core';
+import { DataSharingCDSHookRequest } from '@complylight/core';
 
 import app from '../build/api.js';
 
@@ -96,69 +96,14 @@ describe('GET /schemas/*', () => {
         assert.ok(content.includes('$schema'), "Should be valid JSON schema");
     });
 
-    it('should return sensitivity rules schema', async () => {
+    it('should return data segmentation module schema', async () => {
         const response = await request(app)
-            .get('/schemas/sensitivity-rules.schema.json')
+            .get('/schemas/data-segmentation-module.schema.json')
             .expect(200);
         
         const content = response.text || response.body?.toString?.();
         assert.ok(content, "Schema should be returned");
         assert.ok(content.includes('$schema'), "Should be valid JSON schema");
-    });
-
-});
-
-describe('GET /data/sensitivity-rules.json', () => {
-
-    it('should return rules data', async () => {
-        const response = await request(app)
-            .get('/data/sensitivity-rules.json')
-            .expect(200);
-        
-        assert.ok(response.body, "Rules data should be returned");
-        assert.ok(Array.isArray(response.body.rules) || typeof response.body === 'object', "Should return valid rules structure");
-    });
-
-});
-
-describe('POST /data/sensitivity-rules.json', () => {
-
-    it('should reject without authentication', async () => {
-        await request(app)
-            .post('/data/sensitivity-rules.json')
-            .send({ rules: [] })
-            .expect(401);
-    });
-
-    // Skipped because it would overwrite the real rules file.
-    it.skip('should accept valid rules with auth and update mock file system (SKIPPED: would overwrite real rules file)', async () => {
-        const validRules = {
-            rules: [
-                {
-                    id: "test-rule",
-                    description: "Test rule",
-                    conditions: []
-                }
-            ]
-        };
-        
-        await request(app)
-            .post('/data/sensitivity-rules.json')
-            .auth('administrator', process.env.CDS_ADMINISTRATOR_PASSWORD || '')
-            .send(validRules)
-            .expect(200);
-    });
-
-    it('should reject invalid rules with auth', async () => {
-        const invalidRules = {
-            invalid: "structure"
-        };
-        
-        await request(app)
-            .post('/data/sensitivity-rules.json')
-            .auth('administrator', process.env.CDS_ADMINISTRATOR_PASSWORD || '')
-            .send(invalidRules)
-            .expect(400);
     });
 
 });
@@ -212,23 +157,6 @@ describe('POST /cds-services/patient-consent-consult with headers', () => {
         await request(app)
             .post('/cds-services/patient-consent-consult')
             .set('x-cds-create-audit-event-enabled', 'false')
-            .send(data)
-            .expect(200);
-    });
-
-    it('should handle custom rules file', async () => {
-        let data = new DataSharingCDSHookRequest();
-        data.context.patientId = [{value: '2321'}];
-        data.context.category = [{system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy'}];
-        data.context.consent = [{
-            resourceType: 'Consent',
-            id: 'test-consent',
-            status: 'active'
-        }];
-        
-        await request(app)
-            .post('/cds-services/patient-consent-consult')
-            .set('x-cds-rules-file', 'shares-confidence-mean-only.json')
             .send(data)
             .expect(200);
     });
@@ -337,6 +265,117 @@ describe('POST /cds-services/patient-consent-consult error handling', () => {
             .post('/cds-services/patient-consent-consult')
             .send('not json at all')
             .expect(400);
+    });
+
+});
+
+describe('GET /modules', () => {
+
+    it('should return list of modules', async () => {
+        const response = await request(app)
+            .get('/modules')
+            .expect(200);
+        
+        assert.ok(Array.isArray(response.body), "Should return an array");
+    });
+
+});
+
+describe('GET /modules/:id', () => {
+
+    it('should return 404 for non-existent module', async () => {
+        await request(app)
+            .get('/modules/non-existent-module')
+            .expect(404);
+    });
+
+});
+
+describe('POST /modules', () => {
+
+    it('should reject without authentication', async () => {
+        await request(app)
+            .post('/modules')
+            .send({ id: 'test', name: 'Test' })
+            .expect(401);
+    });
+
+    it('should reject invalid module without auth', async () => {
+        await request(app)
+            .post('/modules')
+            .auth('administrator', process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD || '')
+            .send({ invalid: 'structure' })
+            .expect(400);
+    });
+
+});
+
+describe('PUT /modules/:id', () => {
+
+    it('should reject without authentication', async () => {
+        await request(app)
+            .put('/modules/test-module')
+            .send({ id: 'test', name: 'Test' })
+            .expect(401);
+    });
+
+    it('should return 404 for non-existent module', async () => {
+        await request(app)
+            .put('/modules/non-existent-module')
+            .auth('administrator', process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD || '')
+            .send({ id: 'non-existent-module', name: 'Test' })
+            .expect(404);
+    });
+
+});
+
+describe('DELETE /modules/:id', () => {
+
+    it('should reject without authentication', async () => {
+        await request(app)
+            .delete('/modules/test-module')
+            .expect(401);
+    });
+
+    it('should return 404 for non-existent module', async () => {
+        await request(app)
+            .delete('/modules/non-existent-module')
+            .auth('administrator', process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD || '')
+            .expect(404);
+    });
+
+});
+
+describe('POST /modules/:id/enable', () => {
+
+    it('should reject without authentication', async () => {
+        await request(app)
+            .post('/modules/test-module/enable')
+            .expect(401);
+    });
+
+    it('should return 404 for non-existent module', async () => {
+        await request(app)
+            .post('/modules/non-existent-module/enable')
+            .auth('administrator', process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD || '')
+            .expect(404);
+    });
+
+});
+
+describe('POST /modules/:id/disable', () => {
+
+    it('should reject without authentication', async () => {
+        await request(app)
+            .post('/modules/test-module/disable')
+            .expect(401);
+    });
+
+    it('should return 404 for non-existent module', async () => {
+        await request(app)
+            .post('/modules/non-existent-module/disable')
+            .auth('administrator', process.env.COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD || '')
+            .expect(404);
     });
 
 });

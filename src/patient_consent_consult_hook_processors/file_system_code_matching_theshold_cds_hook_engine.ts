@@ -5,15 +5,25 @@ import { defer, map } from 'rxjs';
 
 import { Bundle, Coding, Consent } from 'fhir/r5';
 
-import { AbstractDataSharingEngine, AbstractSensitivityRuleProvider, DataSharingEngineContext, SystemCode, SystemValue } from '@asushares/core';
+import { AbstractDataSharingEngine, AbstractDataSegmentationModuleProvider, DataSharingEngineContext, DataSegmentationModuleRegistry, SystemCode, SystemValue } from '@complylight/core';
 import { FHIRAuditService } from '../audit/fhir_audit_service.js';
 
 export class FileSystemCodeMatchingThesholdCDSHookEngine extends AbstractDataSharingEngine {
 
     static DEFAULT_THRESHOLD = 0.0;
 
+    constructor(
+        moduleProvider: AbstractDataSegmentationModuleProvider,
+        threshold: number,
+        redaction_enabled: boolean,
+        create_audit_event: boolean,
+        moduleRegistry: DataSegmentationModuleRegistry
+    ) {
+        super(moduleProvider, threshold, redaction_enabled, create_audit_event, moduleRegistry);
+    }
+
     async findConsents(subjects: SystemValue[], categories: SystemCode[]) {
-        let url = process.env.CDS_FHIR_BASE_URL + '/Consent';
+        let url = process.env.COMPLYLIGHT_SERVER_FHIR_BASE_URL + '/Consent';
         // console.log(JSON.stringify(categories));        
         // console.log(subjects.map(n => { return 'subject=' + n.value }).join('&'));
         let params = [...subjects.map(n => { return 'subject=' + n.value }), ...categories.map(n => { return 'category=' + n.code })];

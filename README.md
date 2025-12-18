@@ -1,27 +1,16 @@
-# ASU SHARES FHIR Consent Labeling & Redaction CDS Hooks Services
+# ComplyLight FHIR Consent Labeling & Redaction CDS Hooks Services
 
-[![Build Status](https://ci.asushares.com/api/badges/asushares/cds/status.svg)](https://ci.asushares.com/asushares/cds)
+[![Build Status](https://ci.complylight.com/api/badges/complylight/server/status.svg)](https://ci.complylight.com/complylight/server)
 
-The ASU SHARES FHIR Consent Labeling & Redaction Service from [ASU SHARES](https://www.asushares.com) is a reference implementation providing FHIR-based healthcare data sharing determination decisions and content data redaction functions based on FHIR R5 and CDS Hooks v1 and v2. Long term, we intend to settle on FHIR R6 once the specification stabilizes.
-
-SHARES FHIR Consent Labeling & Redaction Service is part of a U.S. National Institute of Health (NIH) project funded through August, 2028. Technical execution of the Arizona State University (ASU) "Substance use HeAlth REcord Sharing" (SHARES) grant is led by co-investigator Dr. Preston Lee at Arizona State University under principal investigator Dr. Adela Grando. See the [ASU SHARES Team](https://www.asushares.com/team) for a full list of stakeholders.
+The ComplyLight Server from [ComplyLight](https://www.complylight.com) is a production implementation of modular FHIR and standards-based data segmentation servers via configurable rule processing and data labeling, such that healthcare data sharing may be determination decisions and content data redaction functions based on FHIR and CDS Hooks.
 
 At a high level, FHIR Consent Service:
 
- - Loads a configurable set of content sensitivity rules and metadata. 
+ - Loads a configurable set of data segmentation modules and metadata. 
  - Accepts REST invokations (based on the CDS Hooks request/response protocol) of a data sharing consent contexnt and optional FHIR bundle.
  - Queries a FHIR backend server for Consent documents and determines which, if any, are applicable to the CDS invokation context.
- - Informs the client (via FHIR ActCodes) on the nature of content sensitivity rules found to be pertinent to the request.
- - Redact the optionally-provided FHIR bundle, when provided, based on all available sensitivity rule and applicable Consent information.
-
-# Roadmap
-
-| Version   | Expected Features                     | Status    |
-| ----      | ----                                  | ----      |
-| < 1 (Current)       | Initial alpha development of completely new TypeScript-based, stateless implementation of "patient-consent-consult" CDS Hook service as a reusable, containerized microservice. | Complete |
-| 1          | FHIR R5 and CDS Hooks v1/v2 compliance implementation with minimum necessary features applicable for [ASU SHARES](https://www.asushares.com) use cases and baseline performance measurements, including modular processing framework with new weighted classifier implementation. | Complete |
-| 2          | CQL-based classification module | In Progress |
-| 3+        | Context-based classification, LLM-based integrations, and additional advance implementation modules. | Future |
+ - Informs the client (via FHIR ActCodes) on the nature of segmentation rules found to be pertinent to the request.
+ - Redact the optionally-provided FHIR bundle, when provided, based on all available module bindings and applicable Consent information.
 
 # Running the Service with Docker/Podman/Kubernetes
 
@@ -31,14 +20,17 @@ At a high level, FHIR Consent Service:
 If you have your own FHIR R5 server, either set the following environment variables or create a `.env` file with KEY=value definitions for the following:
 
 ```bash
-CDS_FHIR_BASE_URL=https://your_fhir_server_url
-CDS_ADMINISTRATOR_PASSWORD=password_for_post_endpoints
+COMPLYLIGHT_SERVER_FHIR_BASE_URL=https://your_fhir_server_url
+COMPLYLIGHT_SERVER_ADMINISTRATOR_PASSWORD=password_for_post_endpoints
+COMPLYLIGHT_SERVER_MODULES_DIRECTORY=/path/to/modules/directory
 ```
 
-Then run the latest SHARES Consent Service build:
+**Note:** The `COMPLYLIGHT_SERVER_MODULES_DIRECTORY` environment variable specifies the directory where data segmentation module JSON files are stored. On first startup, default core modules will be automatically copied from the core library to this directory if it doesn't already exist.
+
+Then run the latest ComplyLight Consent Service build:
 
 ```shell
-$ docker run -it --rm -p 3000:3000 asushares/cds:latest
+$ docker run -it --rm -p 3000:3000 complylight/server:latest
 ```
 
 To load sample FHIR bundles into your FHIR R5 backend
@@ -51,13 +43,13 @@ If you do not have a server, you may use the  must have a backend FHIR server, s
 
 ## Step 2: Load Seed Data
 
-TODO document using the SHARES Stack Controller!
+TODO document using the ComplyLight Stack Controller!
 
 ## Step 3: Build Your Consent Documents
 
 Consent documents in FHIR R5 are very different than in R4 and prior releases. They are generally more flexible -- e.g. they do not only apply to patients -- and the logical representation requires different considerations than prior implementations.
 
-We have also developed a UI for provider browsing and management of R5 Consent documents called [Consent Manager](https://github.com/asushares/consent-manager) that aims to fully support modeling of R5 Consent documents. See the project page for usage.
+We have also developed a UI for provider browsing and management of R5 Consent documents called [ComplyLight Portal](https://github.com/complylight/portal) that aims to fully support both management of FHIR Consent documents as well as comprehensive data segmentation.
 
 ## Running From Source
 
@@ -78,8 +70,8 @@ $ npm run test-watch # to automatically rerun tests upon code or test changes
 ## Building
 
 ```shell
-$ docker build -t asushares/cds:latest . # Local CPU architecture only
-$ docker buildx build --platform linux/arm64/v8,linux/amd64 -t asushares/cds:latest . --push # Multi-architecture
+$ docker build -t complylight/server:latest . # Local CPU architecture only
+$ docker buildx build --platform linux/arm64/v8,linux/amd64 -t complylight/server:latest . --push # Multi-architecture
 ```
 
 # Examples
@@ -102,15 +94,11 @@ curl -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -
 
 ## CDS-Confidence-Threshold: <number> (default: 0.0)
 
-The CDS-Confidence-Threshold header can be used to specific a new minimum threshold value used to determin what constitutes an applicable sensitivity rule. Rules may use any arbitrary confidence values, though the default rules use 0.0 <= x <= 1.0. So if you want to change this value from the default, try a value greater than 0.0 but less than 1.0. Overly high values will prevent _any_ rule from matching.
+The CDS-Confidence-Threshold header can be used to specify a new minimum threshold value used to determine what constitutes an applicable binding. Bindings may use any arbitrary confidence values, though the default bindings use 0.0 <= x <= 1.0. So if you want to change this value from the default, try a value greater than 0.0 but less than 1.0. Overly high values will prevent _any_ binding from matching.
 
 ## "CDS-Redaction-Enabled": true | <any> (default: true)
 
 By default, the engine will automatically redact any resources labeled as sensitive. You may disable this behavior if, for example, you would to see what the engine considered sensitive for a given set of inputs, but do _not_ want it to actually redact those resources.
-
-## License
-
-Apache 2.0
 
 ## Attribution
 

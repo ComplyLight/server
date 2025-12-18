@@ -1,5 +1,5 @@
 {
-    "$schema": "https://cds-hooks.sandbox.asushares.com/schemas/patient-consent-consult-hook-request.schema.json",
+    "$schema": "https://cds-hooks.sandbox.complylight.com/schemas/patient-consent-consult-hook-request.schema.json",
 	"hook": "patient-consent-consult",
 	"hookInstance": "patient-consent-consult",
 	"context": {

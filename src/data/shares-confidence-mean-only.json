@@ -1,5 +1,5 @@
 {
-	"$schema": "https://cds-hooks.sandbox.asushares.com/schemas/sensitivity-rules.schema.json",
+	"$schema": "https://cds-hooks.sandbox.complylight.com/schemas/sensitivity-rules.schema.json",
 	"name": "SHARES_CONFIDENCE_MEAN",
 	"updated_at": "Not Set",
 	"settings": {

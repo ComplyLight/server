@@ -1,6 +1,6 @@
 {
 	"$schema": "../schemas/sensitivity-rules.schema.json",
-	"name": "ASU SHARES Rule Set",
+	"name": "ComplyLight Rule Set",
 	"updated_at": "4/9/2024 by Preston",
 	"settings": {
 		"editable": true
