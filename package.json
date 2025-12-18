@@ -26,7 +26,7 @@
     },
     "homepage": "https://github.com/complylight/server#readme",
     "dependencies": {
-        "@complylight/core": "^4.0.4",
+        "@complylight/core": "^4.1.0",
         "ajv": "^8.17.1",
         "axios": "^1.13.2",
         "cors": "^2.8.5",
