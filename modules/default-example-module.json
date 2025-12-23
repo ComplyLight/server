@@ -1,7 +1,7 @@
 {
     "$schema": "../schemas/data-segmentation-module.schema.json",
-    "id": "default-42cfr-part2",
-    "name": "Default 42 CFR Part 2 Module",
+    "id": "default-example",
+    "name": "Default Example Module from the ASU SHARES Project",
     "version": "1.0.0",
     "description": "Reference implementation module containing the default ComplyLight information categories and purposes based on 42 CFR Part 2 requirements",
     "enabled": true,

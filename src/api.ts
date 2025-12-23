@@ -68,19 +68,32 @@ const app = express();
 app.use(express.json({ limit: '100mb' }));
 app.use(cors());
 
-// Copy default module from core library if it doesn't exist
-const defaultModulePath = path.join(__dirname, '..', 'node_modules', '@complylight', 'core', 'build', 'src', 'assets', 'modules', 'default-42cfr-part2-module.json');
-const defaultModuleDest = path.join(modulesDirectory, 'default-42cfr-part2-module.json');
+// Copy prepackaged modules from core library if they don't exist
+const prepackagedModulesDir = path.join(__dirname, '..', 'node_modules', '@complylight', 'core', 'build', 'src', 'assets', 'modules');
 
-if (!fs.existsSync(defaultModuleDest) && fs.existsSync(defaultModulePath)) {
+if (fs.existsSync(prepackagedModulesDir)) {
     try {
-        fs.copyFileSync(defaultModulePath, defaultModuleDest);
-        console.log('Copied default-42cfr-part2-module.json to modules directory');
+        const files = fs.readdirSync(prepackagedModulesDir);
+        const jsonFiles = files.filter(file => file.endsWith('.json'));
+        
+        for (const file of jsonFiles) {
+            const sourcePath = path.join(prepackagedModulesDir, file);
+            const destPath = path.join(modulesDirectory, file);
+            
+            if (!fs.existsSync(destPath)) {
+                try {
+                    fs.copyFileSync(sourcePath, destPath);
+                    console.log(`Copied ${file} to modules directory`);
+                } catch (error) {
+                    console.error(`Failed to copy ${file}:`, error);
+                }
+            }
+        }
     } catch (error) {
-        console.error('Failed to copy default module:', error);
+        console.error('Failed to read prepackaged modules directory:', error);
     }
-} else if (!fs.existsSync(defaultModulePath)) {
-    console.warn('Default module file not found in core package. Expected at:', defaultModulePath);
+} else {
+    console.warn('Prepackaged modules directory not found in core package. Expected at:', prepackagedModulesDir);
 }
 
 // Initialize module registry and provider
