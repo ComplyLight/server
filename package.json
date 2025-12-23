@@ -3,9 +3,12 @@
     "version": "4.0.0",
     "type": "module",
     "description": "ComplyLight FHIR Consent CDS Hooks services.",
+    "bin": {
+        "complylight": "./build/bin/complylight.js"
+    },
     "scripts": {
         "start": "npm run build && node build/server.js",
-        "build": "npx tsc && npm run copy-files",
+        "build": "npx tsc && npm run copy-files && chmod +x ./build/bin/*.js",
         "copy-files": "cp -Rf src/data/ build/data/",
         "watch": "nodemon --watch 'src/**' --ext 'ts,json' --ignore 'src/**/*.spec.ts' --exec 'npx tsx src/server.ts'",
         "test": "node --test test/**/*.test.ts",
@@ -26,10 +29,12 @@
     },
     "homepage": "https://github.com/complylight/server#readme",
     "dependencies": {
-        "@complylight/core": "^4.1.0",
+        "@complylight/core": "^4.2.1",
         "ajv": "^8.17.1",
         "axios": "^1.13.2",
+        "commander": "^14.0.2",
         "cors": "^2.8.5",
+        "csv-parser": "^3.2.0",
         "dotenv": "^17.2.3",
         "express": "^5.2.1",
         "express-basic-auth": "^1.2.1",
