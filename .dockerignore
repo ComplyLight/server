@@ -9,3 +9,5 @@ node_modules/
 
 README.md
 .cursorrules
+
+modules/default-*.json
